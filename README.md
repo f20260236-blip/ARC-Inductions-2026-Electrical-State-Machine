@@ -1,71 +1,142 @@
-# Arduino Master-Slave Sensor Monitoring System
+** Master Code **
+#include <IRremote.hpp>
+#include <LiquidCrystal.h>
 
-## Project Overview
-This project involves designing a master-slave microcontroller system using [Tinkercad](https://www.tinkercad.com/). The system utilizes two Arduino boards to monitor environmental conditions and control physical outputs based on a predefined state machine. 
+// Pins for the LiquidCrystal display
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2); 
 
-## Reference Materials
-Before beginning, please review the following tutorials on Arduino basics and circuit design:
-*   [Short Tutorial Video](https://www.youtube.com/watch?v=BLrHTHUjPuw)
-*   [Comprehensive Tutorial Playlist](https://www.youtube.com/playlist?list=PLGs0VKk2DiYw-L-RibttcvK-WBZm8WLEP)
+const int ir = A0; 
 
-## Hardware Requirements
-*   **2x Arduino Boards** (Configured to communicate in a Master-Slave setup)
-*   **Sensor Arduino (Master):** 
-    *   Photoresistor (LDR)
-    *   Gas Sensor
-    *   Temperature Sensor
-    *   Servo Motor
-    *   Piezo Buzzer
-*   **Display/Control Arduino (Slave):**
-    *   LCD Screen
-    *   IR Sensor and Remote
+String lastDisplayMsg = "";
+
+void setup() {
+  Serial.begin(9600); 
+  
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("AWAITING RITUAL");
+
+  IrReceiver.begin(ir, ENABLE_LED_FEEDBACK); 
+}
+
+void loop() {
+
+  if (IrReceiver.decode()) {
+    unsigned long hexVal = IrReceiver.decodedIRData.decodedRawData;
+
+    if (hexVal == 0xFF00BF00) {
+      Serial.write(0); 
+    }
+    else if (hexVal == 0xEF10BF00) {
+      Serial.write(1); 
+    } 
+    else if (hexVal == 0xEE11BF00) {
+      Serial.write(2); 
+    }
+    
+    
+    IrReceiver.resume();
+  }
+  if (Serial.available() > 0) {
+    String incomingMsg = Serial.readStringUntil('\n');
+    incomingMsg.trim(); 
+
+    if (incomingMsg.length() > 0 && incomingMsg != lastDisplayMsg) {
+      lastDisplayMsg = incomingMsg;
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print(incomingMsg);
+    }
+  }
+}
+
+** Slave Code ** 
+
+
+#include <Servo.h>
+
+Servo myservo;
+const int ldr = A0;
+      int gas = A2;
+const int temp = A1;
+const int buzzer = 2;
+const int servo = 3;
+      int currentState = 0;  
+      int displayToggle = 0; // 0 = Light level, 1 = Gas level
+const int DARK_THRESHOLD = 100; 
+
+void setup() 
+{
+  Serial.begin(9600);
+  myservo.attach(servo);
+  myservo.write(0);
+  
+  pinMode(ldr, INPUT);
+  pinMode(gas, INPUT);
+  pinMode(temp, INPUT);
+  pinMode(buzzer, OUTPUT);
+  digitalWrite(buzzer, LOW);
+}
+
+void loop()
+{
+  int r_gas = analogRead(gas);
+  int r_ldr = analogRead(ldr);
+  int rawTemp = analogRead(temp);
+  float voltage = rawTemp * (5.0 / 1024.0); 
+  float r_temp = (voltage - 0.5) * 100.0; 
+  
+
+  if (Serial.available() > 0) {
+    int cmd = Serial.read();
+
+    if (cmd == 0) { 
+      currentState = 0;   
+    } 
+    else if (cmd == 1) { 
+      currentState = 1;   
+      displayToggle = 0; 
+    }
+    else if (cmd == 2) {
+      currentState = 1;  
+      displayToggle = 1;  
+    }
+  }
+
  
-## Addendum(26/8), 
-- please use a 1Kohm Resister as your gas sensor pulldown resistor.
-- You must use I2C to make the Arduino's communicate
-- You may use a normal screen or an I2C screen, however using an I2C screen would be awarded extra points if BOTH the other code and the screen work properly. 
+  if (r_temp > 45.0) {
+    myservo.write(180); 
+    digitalWrite(buzzer, HIGH);
+    Serial.println("COOKED");
+  } 
+  else if (r_gas > 180) {
+    myservo.write(0);
+    Serial.println("TOXIC PURGE");
+     digitalWrite(buzzer, LOW);
+  } 
+  else if (r_ldr < DARK_THRESHOLD) {
+    myservo.write(0);
+    Serial.println("NOCTIS PROTOCOL");
+     digitalWrite(buzzer, LOW);
+  } 
+  else if (currentState == 1) {
+    myservo.write(0);
+    if (displayToggle == 0) {
+      Serial.print("LIGHT: ");
+      Serial.println(r_ldr);
+       digitalWrite(buzzer, LOW);
+    } else {
+      Serial.print("GAS: ");
+      Serial.println(r_gas);
+       digitalWrite(buzzer, LOW);
+    }
+  } 
+  else {
+    myservo.write(0);
+    Serial.println("AWAITING RITUAL");
+     digitalWrite(buzzer, LOW);
+  }
 
-## System Logic: State Machine
-The system must operate strictly based on the following states and conditions:
-
-### State 0: Standby
-*   **Trigger:** System is powered on.
-*   **Action:** Sensors are powered but inactive. The system waits for an activation command via the IR remote.
-*   **LCD Output:** `"AWAITING RITUAL"`
-
-### State 1: Active Monitoring
-*   **Trigger:** Activation command received from the IR remote.
-*   **Action:** The Master Arduino actively polls the photoresistor and gas sensor. 
-*   **Controls:** The user can press a button on the IR remote to toggle the LCD display between showing ambient light levels and gas/air purity percentages.
-
-### State 2: Gas Alert
-*   **Trigger:** Gas sensor reads **>180** units of volatile compounds.
-*   **Action:** Overrides standard LCD telemetry. 
-*   **LCD Output:** `"TOXIC PURGE"`
-*   **Resolution:** The system stays in this state until gas levels drop below 130 units, returning automatically to State 1.
-
-### State 3: Blackout Alert
-*   **Trigger:** Photoresistor detects a sudden, absolute drop in ambient light.
-*   **Action:** The system ignores standard IR commands until lighting is restored and logs the event.
-*   **LCD Output:** `"NOCTIS PROTOCOL"`
-
-### State 4: Temperature Emergency (Highest Priority)
-*   **Trigger:** Temperature sensor registers above 45°C.
-*   **Action:** This state strictly overrides States 0, 1, 2, and 3. The servo motor actuates to 180 degrees (simulating emergency venting).
-*   **LCD Output:** `"COOKED"`
-*   **Resolution:** Requires a manual reset command sent via the IR Remote to exit this state.
-
-### Multi-Fault State
-*   **Trigger:** A combination of State 2 and State 3 occurring simultaneously (excluding State 4).
-*   **Action:** The Piezo buzzer sounds continuously.
-*   **LCD Output:** `"MULTIPLE PROBLEMS DETECTED"`
-*   **Resolution:** Automatically resolves to the appropriate state if the sensor readings change.
-
-
-## Submission Guidelines
-* Submit a .txt file with a link to the tinkercad task as a comment in your code.
-* Follow the main Induction Repo's submission guidelines.
-
-## Changelog
-- Added pulldown resistor reccomendations
-- gas sensor threshold changed to 180 instead of 130
+  delay(100); 
+}
