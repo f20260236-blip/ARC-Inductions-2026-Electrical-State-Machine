@@ -3,7 +3,6 @@
       #include <IRremote.hpp>
       #include <LiquidCrystal.h>
 
-   // Pins for the LiquidCrystal display
       LiquidCrystal lcd(12, 11, 5, 4, 3, 2); 
 
      const int ir = A0; 
@@ -21,7 +20,7 @@
      IrReceiver.begin(ir, ENABLE_LED_FEEDBACK); 
                 }
 
-  void loop() {
+        void loop() {
 
         if (IrReceiver.decode()) {
           unsigned long hexVal = IrReceiver.decodedIRData.decodedRawData;
@@ -55,7 +54,7 @@
 ** Slave Code ** 
 
 
-   #include <Servo.h>
+       #include <Servo.h>
 
     Servo myservo;
     const int ldr = A0;
