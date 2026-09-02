@@ -1,15 +1,16 @@
 ** Master Code **
-#include <IRremote.hpp>
-#include <LiquidCrystal.h>
+
+      #include <IRremote.hpp>
+      #include <LiquidCrystal.h>
 
    // Pins for the LiquidCrystal display
-   LiquidCrystal lcd(12, 11, 5, 4, 3, 2); 
+      LiquidCrystal lcd(12, 11, 5, 4, 3, 2); 
 
-  const int ir = A0; 
+     const int ir = A0; 
 
-  String lastDisplayMsg = "";
+     String lastDisplayMsg = "";
 
-  void setup() {
+     void setup() {
      Serial.begin(9600); 
   
     lcd.begin(16, 2);
@@ -17,7 +18,7 @@
     lcd.setCursor(0, 0);
     lcd.print("AWAITING RITUAL");
 
-  IrReceiver.begin(ir, ENABLE_LED_FEEDBACK); 
+     IrReceiver.begin(ir, ENABLE_LED_FEEDBACK); 
                 }
 
   void loop() {
@@ -54,7 +55,7 @@
 ** Slave Code ** 
 
 
-#include <Servo.h>
+   #include <Servo.h>
 
     Servo myservo;
     const int ldr = A0;
